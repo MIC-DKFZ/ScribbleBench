@@ -1,0 +1,35 @@
+filter:
+  min_area: 0  # 2
+
+foreground:
+  scribbles:
+    nurbs:
+      num_scribbles: 1
+      params:
+        num_control_points: 4
+        curve_delta: 0.001
+    contour:
+      num_scribbles: 1
+      params:
+        disk_size_range: [1, 4]
+        scribble_length_range: [0.07, 0.15]
+  num_slice_range: 1.0
+  class_probabilities: 1
+
+background:
+  scribbles:
+    nurbs:
+      num_scribbles: 1
+      params:
+        num_control_points: 4
+        curve_delta: 0.001
+    contour:
+      num_scribbles: 1
+      params:
+        disk_size_range: [1, 4]
+        scribble_length_range: [0.07, 0.15]
+  num_slice_range: 1.0  # 0.1
+  class_probabilities: 1
+
+generation_properties:
+  scribble_thickness: 3
