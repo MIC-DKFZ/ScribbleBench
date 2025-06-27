@@ -33,7 +33,7 @@ def generate_scribble_dataset(load_dir, save_dir, num_labels, conf_filepath, num
         num_processes = int(num_processes)    
 
     if names is None:
-        names = [path.name[:-7] for path in Path(load_dir).rglob("*.nii.gz")]
+        names = [path.name[:-7] for path in load_dir.rglob("*.nii.gz")]
     elif isinstance(names, str):
         names = [names]
 

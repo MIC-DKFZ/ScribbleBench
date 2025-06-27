@@ -1,49 +1,124 @@
 # ScribbleBench
 
 [![License Apache Software License 2.0](https://img.shields.io/pypi/l/ScribbleBench.svg?color=green)](https://github.com/Karol-G/ScribbleBench/raw/main/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/ScribbleBench.svg?color=green)](https://pypi.org/project/ScribbleBench)
 [![Python Version](https://img.shields.io/pypi/pyversions/ScribbleBench.svg?color=green)](https://python.org)
-[![tests](https://github.com/Karol-G/ScribbleBench/workflows/tests/badge.svg)](https://github.com/Karol-G/ScribbleBench/actions)
-![Unit Tests](https://github.com/Karol-G/ScribbleBench/actions/workflows/test_and_deploy.yml/badge.svg?branch=main)
-[![codecov](https://codecov.io/gh/Karol-G/ScribbleBench/branch/main/graph/badge.svg)](https://codecov.io/gh/Karol-G/ScribbleBench)
 
-Revisiting 3D Medical Scribble Supervision: Benchmarking Beyond Cardiac Segmentation
+**ScribbleBench** is a comprehensive benchmark for evaluating the generalization capabilities of 3D scribble-supervised medical image segmentation methods. It spans seven diverse datasets across multiple anatomies and modalities and provides realistic, automatically generated scribble annotations.
 
-----------------------------------
+This repository provides:
+- A guide on how to setup the ScribbleBench benchmark using the original dataset sources and our ScribbleBench scribbles.
+- Our scribble generation code to create realistic interior and boundary scribbles heuristics.
+- An evaluation script to evaluate your method using ScribbleBench.
+- A reference to our scribble baseline nnnUNet+pL
+- A scribble annotation protocol for domain experts that can be used as guidance to quickly annotate new datasets manually.
 
-Project description...
-
-## Installation
-
-You can install `ScribbleBench` via [pip](https://pypi.org/project/ScribbleBench/):
-
-    pip install ScribbleBench
+ScribbleBench was introduced in our MICCAI 2025 paper:  
+**“Revisiting 3D Medical Scribble Supervision: Benchmarking Beyond Cardiac Segmentation”**  
+Authors: Karol Gotkowski, Klaus H. Maier-Hein, Fabian Isensee
 
 
+## 📦 Benchmark Setup
+
+ScribbleBench includes scribbles for the following 7 public datasets:
+- ACDC
+- MSCMR
+- WORD
+- AMOS2022 (Task2)
+- KiTS23
+- LiTS
+- BraTS2020
+
+### 📥 Download Datasets
+
+TODO
 
 
-## Contributing
+## 🛠️ Scribble Generation
 
-Contributions are very welcome. Tests can be run with [tox], please ensure
-the coverage at least stays the same before you submit a pull request.
+You can use our script to generate scribbles for your own 3D medical segmentation datasets. The script supports:
+- Interior scribbles using NURBS curves.
+- Boundary scribbles based on partial contours.
+- Foreground/background slice balancing.
+- Multiprocessing for efficient processing of large datasets.
 
-## License
+### 🚀 Run Scribble Generation
 
-Distributed under the terms of the [Apache Software License 2.0] license,
-"ScribbleBench" is free and open source software
+```bash
+python generate_scribbles.py \
+  --input path/to/dense_segmentations \
+  --output path/to/save_scribbles \
+  --num_labels 4 \
+  --conf scribble_conf.yml \
+  --processes 8
+```
 
-## Issues
+**Optional arguments:**
 
-If you encounter any problems, please file an issue along with a detailed description.
+* `--name` → specify one or more file names to process (omit `.nii.gz`)
+* `--disable_ignore` → disables marking unlabeled voxels with an ignore label
 
-[Cookiecutter]: https://github.com/audreyr/cookiecutter
-[MIT]: http://opensource.org/licenses/MIT
-[BSD-3]: http://opensource.org/licenses/BSD-3-Clause
-[GNU GPL v3.0]: http://www.gnu.org/licenses/gpl-3.0.txt
-[GNU LGPL v3.0]: http://www.gnu.org/licenses/lgpl-3.0.txt
-[Apache Software License 2.0]: http://www.apache.org/licenses/LICENSE-2.0
-[Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
+## 📊 Evaluation
 
-[tox]: https://tox.readthedocs.io/en/latest/
-[pip]: https://pypi.org/project/pip/
-[PyPI]: https://pypi.org/
+You can evaluate your segmentation predictions using the provided script:
+
+```bash
+python evaluation.py \
+  --gt_dir path/to/ground_truth \
+  --pred_dir path/to/predictions \
+  --num_labels 4 \
+  --processes 8
+```
+
+## 🛠️ Scribble Baseline nnUNet+pL
+
+Our scribble baseline nnUNet+pL is implemented in the [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) framework itself. It is there referred to as "ignore label" and is described [here](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/ignore_label.md).
+
+## 📋 Scribble Annotation Protocol
+
+You can also manually create your own scribbles for new datasets by following this lightweight annotation protocol. These human-created scribbles can be used directly to train a model using the same methods as with automatically generated ones.
+
+### ✏️ Instructions
+
+Given a 3D image **I** in your dataset:
+- For each axial slice **S** in **I**:
+  - For each class **C** present in slice **S**:
+    - Select a single **connected component (CC)** of class **C** in **S**
+    - For that component **CC**, draw:
+      - One **interior scribble**
+      - One **boundary scribble**
+
+Note: Do not ignore the background class! Also include a good number of pure background slices.
+
+#### 🟢 Interior Scribble
+- Must be drawn **inside the component CC**.
+- Should be placed roughly **in and around the center area** of the component.
+- Ideal length is **comparable to the diameter or extent** of the component.
+- Can be any arbitrary shape (straight, curved, etc.) as long as it lies **fully within the component**.
+
+#### 🔵 Boundary Scribble
+- Should trace **a portion (15%–100%)** of the **inner boundary** of the component CC.
+- Should ideally follow the actual boundary as closely as possible.
+- A **1–3 voxel inward offset** is acceptable, but **closer to the true boundary is better**.
+- This scribble helps the model capture **boundary details** during learning.
+
+Following this protocol allows quick and efficient labeling of 3D datasets using just a few sparse lines per class and slice, while maintaining strong training performance.
+
+
+
+## 📄 Citation
+
+If you use ScribbleBench or our scribble generation code, please cite:
+
+```bibtex
+@inproceedings{gotkowski2025scribblebench,
+  title     = {Revisiting 3D Medical Scribble Supervision: Benchmarking Beyond Cardiac Segmentation},
+  author    = {Karol Gotkowski and Klaus H. Maier-Hein and Fabian Isensee},
+  booktitle = {International Conference on Medical Image Computing and Computer-Assisted Intervention (MICCAI)},
+  year      = {2025}
+}
+```
+
+
+## 📬 Contact
+
+For questions, suggestions, or contributions, feel free to open an issue or contact [karol.gotkowski@dkfz.de](mailto:karol.gotkowski@dkfz.de).
