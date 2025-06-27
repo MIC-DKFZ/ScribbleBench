@@ -69,7 +69,7 @@ python evaluation.py \
   --processes 8
 ```
 
-## 🛠️ Scribble Baseline nnUNet+pL
+## 🧠 Scribble Baseline nnUNet+pL
 
 Our scribble baseline nnUNet+pL is implemented in the [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) framework itself. It is there referred to as "ignore label" and is described [here](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/ignore_label.md).
 
