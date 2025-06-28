@@ -1,8 +1,5 @@
 # ScribbleBench
 
-[![License Apache Software License 2.0](https://img.shields.io/pypi/l/ScribbleBench.svg?color=green)](https://github.com/Karol-G/ScribbleBench/raw/main/LICENSE)
-[![Python Version](https://img.shields.io/pypi/pyversions/ScribbleBench.svg?color=green)](https://python.org)
-
 **ScribbleBench** is a comprehensive benchmark for evaluating the generalization capabilities of 3D scribble-supervised medical image segmentation methods. It spans seven diverse datasets across multiple anatomies and modalities and provides realistic, automatically generated scribble annotations.
 
 This repository provides:

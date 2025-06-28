@@ -9,8 +9,8 @@ from medvol import MedVol
 def evaluate(gt_dir, pred_dir, num_classes, num_processes=None):    
     gt_dir = Path(gt_dir)
     pred_dir = Path(pred_dir)
-    names_gt = [path.name[:-7] for path in Path(gt_dir).rglob("*.nii.gz")]
-    names_pred = [path.name[:-7] for path in Path(pred_dir).rglob("*.nii.gz")]
+    names_gt = [path.name[:-7] for path in gt_dir.rglob("*.nii.gz")]
+    names_pred = [path.name[:-7] for path in pred_dir.rglob("*.nii.gz")]
 
     if set(names_gt) != set(names_pred):
         raise RuntimeError(f"The set of GT segmentations is different to the set of predictions. Do you have missing predictions?")
