@@ -46,7 +46,7 @@ def download_case(case_num: int, save_dir, pbar: tqdm, retry=True):
         if retry:
             print(f"\nFailed to download case_{case_num:05d}. Retrying...")
             sleep(5)
-            download_case(case_num, pbar, retry=False)
+            download_case(case_num, save_dir, pbar, retry=False)
         pbar.close()
         while True:
             try:

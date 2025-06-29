@@ -9,6 +9,7 @@ from git import Repo
 import os
 from utils.download_kits23 import download_dataset
 from natsort import natsorted
+import tarfile
 
 
 def setup_word_dataset(dataset_dir):
@@ -268,12 +269,82 @@ def setup_kits_dataset(dataset_dir):
     print("Finished setting up KiTS2023 dataset.")
 
 
+def setup_lits_dataset(dataset_dir):
+    dataset_dir = Path(dataset_dir) / "ScribbleBench"
+    archive_dir = dataset_dir / "archive"
+    raw_dir = dataset_dir / "raw"
+    lits_raw_dir = raw_dir / "Task03_Liver"
+    preprocessed_dir = dataset_dir
+    lits_preprocessed_dir = preprocessed_dir / "LiTS"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    preprocessed_dir.mkdir(parents=True, exist_ok=True)
+    lits_preprocessed_dir.mkdir(parents=True, exist_ok=True)
+
+    test_set = ['liver_112', 'liver_38', 'liver_47', 'liver_84', 'liver_119', 'liver_15', 'liver_62', 'liver_72', 'liver_98', 
+                'liver_0', 'liver_66', 'liver_7', 'liver_58', 'liver_93', 'liver_104', 'liver_43', 'liver_64', 'liver_91', 'liver_126', 
+                'liver_69', 'liver_102', 'liver_123', 'liver_127', 'liver_26', 'liver_35', 'liver_45', 'liver_73', 'liver_89', 
+                'liver_106', 'liver_29', 'liver_36', 'liver_109', 'liver_12', 'liver_128', 'liver_20', 'liver_54', 'liver_8', 
+                'liver_19', 'liver_21']
+
+    ####################################################################################################################
+    #### Download LiTS dataset
+    ####################################################################################################################
+
+    # Instead of the LiTS we are downloading the MSD Task03_Liver dataset, which is the exact same as the LiTS dataset but with fixed labels
+    print("Downloading LiTS dataset...")
+    url = 'https://drive.google.com/file/d/1jyVGUGyxKBXV6_9ivuZapQS8eUJXCIpu/view'
+    gdown.download(url, str(archive_dir / "Task03_Liver.tar"), fuzzy=True)
+
+    ####################################################################################################################
+    #### Unpack LiTS archive
+    ####################################################################################################################
+
+    print("Unpacking LiTS archive...")
+    with tarfile.open(archive_dir / "Task03_Liver.tar", "r:*") as tar:
+        tar.extractall(path=raw_dir)
+
+    ####################################################################################################################
+    #### Preprocess LiTS dataset
+    ####################################################################################################################
+
+    print("Preprocessing LiTS dataset...")
+
+    (lits_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
+    (lits_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
+    (lits_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (lits_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
+
+    names = [p.name[:-7] for p in (lits_raw_dir / "labelsTr").iterdir()]
+    names = natsorted(names)
+    for name in names:
+        postfix = "Tr" if name not in test_set else "Ts"
+        shutil.move(lits_raw_dir / "imagesTr" / f"{name}.nii.gz", lits_preprocessed_dir / f"images{postfix}" / f"{name}_0000.nii.gz")
+        shutil.move(lits_raw_dir / "labelsTr" / f"{name}.nii.gz", lits_preprocessed_dir / f"labels{postfix}" / f"{name}.nii.gz")
+
+    dataset_json_url = 'https://syncandshare.desy.de/index.php/s/wBMtJcFm6D2icXA/download/dataset.json'
+    response = requests.get(dataset_json_url)
+    response.raise_for_status()  # Raise an error on bad status
+    with open(lits_preprocessed_dir / "dataset.json", "wb") as f:
+        f.write(response.content)
+
+    ####################################################################################################################
+    #### Delete raw dataset files
+    ####################################################################################################################
+
+    print("Deleting archive and raw dataset files...")
+    shutil.rmtree(archive_dir, ignore_errors=True)
+    shutil.rmtree(raw_dir, ignore_errors=True)
+
+    print("Finished setting up LiTS dataset.")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', "--dataset_dir", required=True, type=str, help="Path to the dir used for setting up ScribbleBench.")
     parser.add_argument('--word', required=False, default=False, action="store_true", help="Download and preprocess the WORD dataset for ScribbleBench.")
     parser.add_argument('--mscmr', required=False, default=False, action="store_true", help="Download and preprocess the MSCMR dataset for ScribbleBench.")
     parser.add_argument('--kits', required=False, default=False, action="store_true", help="Download and preprocess the KiTS2023 dataset for ScribbleBench.")
+    parser.add_argument('--lits', required=False, default=False, action="store_true", help="Download and preprocess the LiTS dataset for ScribbleBench.")
     args = parser.parse_args()
 
     if args.word:
@@ -282,4 +353,5 @@ if __name__ == '__main__':
         setup_mscmr_dataset(args.dataset_dir)
     if args.kits:
         setup_kits_dataset(args.dataset_dir)
-        
+    if args.lits:
+        setup_lits_dataset(args.dataset_dir)
