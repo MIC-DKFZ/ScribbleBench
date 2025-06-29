@@ -21,7 +21,7 @@ ScribbleBench includes scribbles for the following 7 public datasets:
 - MSCMR
 - WORD
 - AMOS2022 (Task2)
-- KiTS23
+- KiTS2023
 - LiTS
 - BraTS2020
 
