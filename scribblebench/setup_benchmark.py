@@ -8,8 +8,10 @@ import argparse
 from git import Repo
 import os
 from utils.download_kits23 import download_dataset
+from utils.info2dict import info2dict
 from natsort import natsorted
 import tarfile
+from tqdm import tqdm
 
 
 def setup_word_dataset(dataset_dir):
@@ -338,6 +340,99 @@ def setup_lits_dataset(dataset_dir):
     print("Finished setting up LiTS dataset.")
 
 
+def setup_acdc_dataset(dataset_dir):
+    dataset_dir = Path(dataset_dir) / "ScribbleBench"
+    archive_dir = dataset_dir / "archive"
+    raw_dir = dataset_dir / "raw"
+    acdc_raw_dir = raw_dir
+    preprocessed_dir = dataset_dir
+    acdc_preprocessed_dir = preprocessed_dir / "ACDC"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    preprocessed_dir.mkdir(parents=True, exist_ok=True)
+    acdc_preprocessed_dir.mkdir(parents=True, exist_ok=True)
+
+    test_set = ['patient072_ED', 'patient041_ED', 'patient078_ED', 'patient024_ED', 'patient060_ES', 'patient078_ES', 'patient073_ED', 
+                'patient082_ED', 'patient010_ED', 'patient005_ED', 'patient077_ED', 'patient080_ED', 'patient024_ES', 'patient077_ES', 
+                'patient030_ES', 'patient039_ES', 'patient041_ES', 'patient082_ES', 'patient060_ED', 'patient010_ES', 'patient030_ED', 
+                'patient005_ES', 'patient036_ES', 'patient073_ES', 'patient064_ES', 'patient039_ED', 'patient080_ES', 'patient064_ED', 
+                'patient036_ED', 'patient072_ES']
+
+    ####################################################################################################################
+    #### Download ACDC dataset
+    ####################################################################################################################
+
+    print("Downloading ACDC dataset...")
+
+    url = "https://humanheart-project.creatis.insa-lyon.fr/database/api/v1/collection/637218c173e9f0047faa00fb/download"
+    acdc_archive_file = archive_dir / "ACDC.zip"
+    # Stream the download with a progress bar
+    with requests.get(url, stream=True) as response:
+        response.raise_for_status()
+        approx_total_size = int(2452590457)
+        chunk_size = 8192
+
+        with open(acdc_archive_file, "wb") as f, tqdm(
+            total=approx_total_size,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+            desc=acdc_archive_file.name,
+        ) as progress:
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    f.write(chunk)
+                    progress.update(len(chunk))
+
+    ####################################################################################################################
+    #### Unpack ACDC archive
+    ####################################################################################################################
+
+    print("Unpacking ACDC archive...")
+    with zipfile.ZipFile(acdc_archive_file, 'r') as zip_ref:
+        zip_ref.extractall(acdc_raw_dir)
+
+    ####################################################################################################################
+    #### Preprocess ACDC dataset
+    ####################################################################################################################
+
+    print("Preprocessing ACDC dataset...")
+
+    (acdc_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
+    (acdc_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
+    (acdc_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (acdc_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
+
+    acdc_train_raw_dir = acdc_raw_dir / "ACDC" / "database" / "training"
+    names = [p.name for p in acdc_train_raw_dir.iterdir() if p.is_dir()]
+    names = natsorted(names)
+
+    for name in names:
+        info = info2dict(acdc_train_raw_dir / name / "Info.cfg")
+        ed_name = f"{name}_frame{str(info["ED"]).zfill(2)}"
+        es_name = f"{name}_frame{str(info["ES"]).zfill(2)}"
+        postfix = "Tr" if f"{name}_ED" not in test_set else "Ts"
+        shutil.move(acdc_train_raw_dir / name / f"{ed_name}.nii.gz", acdc_preprocessed_dir / f"images{postfix}" / f"{name}_ED_0000.nii.gz")
+        shutil.move(acdc_train_raw_dir / name / f"{es_name}.nii.gz", acdc_preprocessed_dir / f"images{postfix}" / f"{name}_ES_0000.nii.gz")
+        shutil.move(acdc_train_raw_dir / name / f"{ed_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}" / f"{name}_ED.nii.gz")
+        shutil.move(acdc_train_raw_dir / name / f"{es_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}" / f"{name}_ES.nii.gz")
+
+    dataset_json_url = "https://syncandshare.desy.de/index.php/s/KCDbLyeMwwZpFH5/download/dataset.json"
+    response = requests.get(dataset_json_url)
+    response.raise_for_status()  # Raise an error on bad status
+    with open(acdc_preprocessed_dir / "dataset.json", "wb") as f:
+        f.write(response.content)
+
+    ####################################################################################################################
+    #### Delete raw dataset files
+    ####################################################################################################################
+
+    print("Deleting archive and raw dataset files...")
+    shutil.rmtree(archive_dir, ignore_errors=True)
+    shutil.rmtree(raw_dir, ignore_errors=True)
+
+    print("Finished setting up ACDC dataset.")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', "--dataset_dir", required=True, type=str, help="Path to the dir used for setting up ScribbleBench.")
@@ -345,6 +440,7 @@ if __name__ == '__main__':
     parser.add_argument('--mscmr', required=False, default=False, action="store_true", help="Download and preprocess the MSCMR dataset for ScribbleBench.")
     parser.add_argument('--kits', required=False, default=False, action="store_true", help="Download and preprocess the KiTS2023 dataset for ScribbleBench.")
     parser.add_argument('--lits', required=False, default=False, action="store_true", help="Download and preprocess the LiTS dataset for ScribbleBench.")
+    parser.add_argument('--acdc', required=False, default=False, action="store_true", help="Download and preprocess the ACDC dataset for ScribbleBench.")
     args = parser.parse_args()
 
     if args.word:
@@ -355,3 +451,6 @@ if __name__ == '__main__':
         setup_kits_dataset(args.dataset_dir)
     if args.lits:
         setup_lits_dataset(args.dataset_dir)
+    if args.lits:
+        setup_acdc_dataset(args.dataset_dir)
+
