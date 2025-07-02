@@ -1,17 +1,15 @@
 import gdown
 import subprocess
 from pathlib import Path
-import requests
 import zipfile
 import shutil
 import argparse
 from git import Repo
 import os
 from utils.download_kits23 import download_dataset
-from utils.info2dict import info2dict
+from utils.utils import info2dict, download
 from natsort import natsorted
 import tarfile
-from tqdm import tqdm
 
 
 def setup_word_dataset(dataset_dir):
@@ -24,12 +22,21 @@ def setup_word_dataset(dataset_dir):
     preprocessed_dir.mkdir(parents=True, exist_ok=True)
 
     ####################################################################################################################
-    #### Download WORD dataset (no GT labels)
+    #### Download WORD dataset
     ####################################################################################################################
 
-    print("Downloading WORD dataset (no GT labels)...")
+    print("Downloading WORD dataset...")
     url = 'https://drive.google.com/file/d/19OWCXZGrimafREhXm8O8w2HBHZTfxEgU/view'
     gdown.download(url, str(archive_dir / "WORD-V0.1.0.zip"), fuzzy=True)
+
+    url = "https://github.com/HiLab-git/WORD/raw/main/WORD_V0.1.0_labelsTs.zip"
+    download(url, archive_dir / "WORD_V0.1.0_labelsTs.zip")
+
+    scribbles_url = "https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei/download/ScribbleBench_scribbles.zip"
+    download(scribbles_url, archive_dir / "ScribbleBench_scribbles.zip")
+
+    dataset_json_url = "https://syncandshare.desy.de/index.php/s/CsEzWewcxpkoC55/download/dataset.json"
+    download(dataset_json_url, word_preprocessed_dir / "dataset.json")
 
     ####################################################################################################################
     #### Unpack WORD dataset archive
@@ -42,24 +49,11 @@ def setup_word_dataset(dataset_dir):
         f"-o{raw_dir / "WORD"}"
     ], check=True)
 
-    ####################################################################################################################
-    #### Download WORD GT labels
-    ####################################################################################################################
-
-    print("Downloading WORD GT labels...")
-    url = "https://github.com/HiLab-git/WORD/raw/main/WORD_V0.1.0_labelsTs.zip"
-    response = requests.get(url)
-    response.raise_for_status()  # Raise an error on bad status
-    with open(archive_dir / "WORD_V0.1.0_labelsTs.zip", "wb") as f:
-        f.write(response.content)
-
-    ####################################################################################################################
-    #### Unpack WORD labels archive
-    ####################################################################################################################
-
-    print("Unpacking WORD labels archive...")
     with zipfile.ZipFile(archive_dir / "WORD_V0.1.0_labelsTs.zip", 'r') as zip_ref:
         zip_ref.extractall(raw_dir / "WORD" / "WORD-V0.1.0")
+
+    with zipfile.ZipFile(archive_dir / "ScribbleBench_scribbles.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir / "WORD")
 
     ####################################################################################################################
     #### Preprocess WORD dataset
@@ -74,6 +68,7 @@ def setup_word_dataset(dataset_dir):
     (word_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
     (word_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
     (word_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (word_preprocessed_dir / "labelsTr_dense").mkdir(parents=True, exist_ok=True)
     (word_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
 
     names = [path.name[:-7] for path in (word_raw_dir / "imagesTr").rglob("*.nii.gz")]
@@ -88,21 +83,21 @@ def setup_word_dataset(dataset_dir):
     for name in names:
         shutil.move(word_raw_dir / "imagesTs" / f"{name}.nii.gz", word_preprocessed_dir / "imagesTs" / f"{name}_0000.nii.gz")
 
-
     names = [path.name[:-7] for path in (word_raw_dir / "labelsTr").rglob("*.nii.gz")]
     for name in names:
-        shutil.move(word_raw_dir / "labelsTr" / f"{name}.nii.gz", word_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
+        shutil.move(word_raw_dir / "labelsTr" / f"{name}.nii.gz", word_preprocessed_dir / "labelsTr_dense" / f"{name}.nii.gz")
 
     names = [path.name[:-7] for path in (word_raw_dir / "labelsVal").rglob("*.nii.gz")]
     for name in names:
-        shutil.move(word_raw_dir / "labelsVal" / f"{name}.nii.gz", word_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
+        shutil.move(word_raw_dir / "labelsVal" / f"{name}.nii.gz", word_preprocessed_dir / "labelsTr_dense" / f"{name}.nii.gz")
 
     names = [path.name[:-7] for path in (word_raw_dir / "labelsTs").rglob("*.nii.gz")]
     for name in names:
         shutil.move(word_raw_dir / "labelsTs" / f"{name}.nii.gz", word_preprocessed_dir / "labelsTs" / f"{name}.nii.gz")
 
-
-    shutil.move(word_raw_dir / "dataset.json", word_preprocessed_dir / "dataset.json")
+    names = [path.name[:-7] for path in (raw_dir / "WORD" / "ScribbleBench_scribbles" / "WORD" / "scribblesTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "WORD" / "ScribbleBench_scribbles" / "WORD" / "scribblesTr" / f"{name}.nii.gz", word_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
 
     ####################################################################################################################
     #### Delete archive and raw dataset files
@@ -137,10 +132,13 @@ def setup_mscmr_dataset(dataset_dir):
     Repo.clone_from(repo_url, repo_dir)
 
     train_labels_url = "https://syncandshare.desy.de/index.php/s/j2t8g8P8LHb9Xfk/download/labelsTr.zip"
-    response = requests.get(train_labels_url)
-    response.raise_for_status()  # Raise an error on bad status
-    with open(archive_dir / "labelsTr.zip", "wb") as f:
-        f.write(response.content)
+    download(train_labels_url, archive_dir / "labelsTr.zip")
+
+    scribbles_url = "https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei/download/ScribbleBench_scribbles.zip"
+    download(scribbles_url, archive_dir / "ScribbleBench_scribbles.zip")
+
+    dataset_json_url = "https://syncandshare.desy.de/index.php/s/9gdZ33WL2nPXpGC/download/dataset.json"
+    download(dataset_json_url, mscmr_preprocessed_dir / "dataset.json")
 
     ####################################################################################################################
     #### Unpack MSCMR labels archive
@@ -148,7 +146,10 @@ def setup_mscmr_dataset(dataset_dir):
 
     print("Unpacking MSCMR labels archive...")
     with zipfile.ZipFile(archive_dir / "labelsTr.zip", 'r') as zip_ref:
-        zip_ref.extractall(mscmr_preprocessed_dir)
+        zip_ref.extractall(raw_dir)
+
+    with zipfile.ZipFile(archive_dir / "ScribbleBench_scribbles.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir)
 
     ####################################################################################################################
     #### Preprocess MSCMR dataset
@@ -160,6 +161,7 @@ def setup_mscmr_dataset(dataset_dir):
     (mscmr_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
     (mscmr_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
     (mscmr_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (mscmr_preprocessed_dir / "labelsTr_dense").mkdir(parents=True, exist_ok=True)
     (mscmr_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
 
     names = [path.name[:-7] for path in (mscmr_raw_dir / "train" / "images").rglob("*.nii.gz")]
@@ -174,19 +176,21 @@ def setup_mscmr_dataset(dataset_dir):
     for name in names:
         shutil.move(mscmr_raw_dir / "TestSet" / "images" / f"{name}.nii.gz", mscmr_preprocessed_dir / "imagesTs" / f"{name}_0000.nii.gz")
 
+    names = [path.name[:-7] for path in (raw_dir / "labelsTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "labelsTr" / f"{name}.nii.gz", mscmr_preprocessed_dir / "labelsTr_dense" / f"{name}.nii.gz")
+
     names = [path.name[:-7] for path in (mscmr_raw_dir / "TestSet" / "labels").rglob("*.nii.gz")]
     for name in names:
         shutil.move(mscmr_raw_dir / "TestSet" / "labels" / f"{name}.nii.gz", mscmr_preprocessed_dir / "labelsTs" / f"{name}.nii.gz")
 
+    names = [path.name[:-7] for path in (raw_dir / "ScribbleBench_scribbles" / "MSCMR" / "scribblesTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "ScribbleBench_scribbles" / "MSCMR" / "scribblesTr" / f"{name}.nii.gz", mscmr_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
+
     # These two images have no dense GT so it is not possible to generate scribbles for them
     os.remove(mscmr_preprocessed_dir / "imagesTr" / "subject2_DE_0000.nii.gz")
     os.remove(mscmr_preprocessed_dir / "imagesTr" / "subject4_DE_0000.nii.gz")
-
-    dataset_json_url = "https://syncandshare.desy.de/index.php/s/9gdZ33WL2nPXpGC/download/dataset.json"
-    response = requests.get(dataset_json_url)
-    response.raise_for_status()  # Raise an error on bad status
-    with open(mscmr_preprocessed_dir / "dataset.json", "wb") as f:
-        f.write(response.content)
 
     ####################################################################################################################
     #### Delete archive and raw dataset files
@@ -201,6 +205,7 @@ def setup_mscmr_dataset(dataset_dir):
 
 def setup_kits_dataset(dataset_dir):
     dataset_dir = Path(dataset_dir) / "ScribbleBench"
+    archive_dir = dataset_dir / "archive"
     raw_dir = dataset_dir / "raw"
     kits_raw_dir = raw_dir / "KiTS2023" / "dataset"
     preprocessed_dir = dataset_dir
@@ -237,6 +242,21 @@ def setup_kits_dataset(dataset_dir):
     Repo.clone_from(repo_url, str(kits_raw_dir.parent))
     download_dataset(kits_raw_dir)
 
+    scribbles_url = "https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei/download/ScribbleBench_scribbles.zip"
+    download(scribbles_url, archive_dir / "ScribbleBench_scribbles.zip")
+
+    dataset_json_url = "https://syncandshare.desy.de/index.php/s/Cfpwyg5dmi9a2Df/download/dataset.json"
+    download(dataset_json_url, kits_preprocessed_dir / "dataset.json")
+
+    ####################################################################################################################
+    #### Unpack KiTS2023 dataset archive
+    ####################################################################################################################
+
+    print("Unpacking KiTS2023 dataset archive...")
+
+    with zipfile.ZipFile(archive_dir / "ScribbleBench_scribbles.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir)
+
     ####################################################################################################################
     #### Preprocess KiTS2023 dataset
     ####################################################################################################################
@@ -246,6 +266,7 @@ def setup_kits_dataset(dataset_dir):
     (kits_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
     (kits_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
     (kits_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (kits_preprocessed_dir / "labelsTr_dense").mkdir(parents=True, exist_ok=True)
     (kits_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
 
     names = [p.name for p in kits_raw_dir.iterdir() if p.is_dir()]
@@ -253,13 +274,14 @@ def setup_kits_dataset(dataset_dir):
     for name in names:
         postfix = "Tr" if name not in test_set else "Ts"
         shutil.move(kits_raw_dir / name / "imaging.nii.gz", kits_preprocessed_dir / f"images{postfix}" / f"{name}_0000.nii.gz")
-        shutil.move(kits_raw_dir / name / "segmentation.nii.gz", kits_preprocessed_dir / f"labels{postfix}" / f"{name}.nii.gz")
+        if postfix == "Tr":
+            shutil.move(kits_raw_dir / name / "segmentation.nii.gz", kits_preprocessed_dir / f"labels{postfix}_dense" / f"{name}.nii.gz")
+        else:
+            shutil.move(kits_raw_dir / name / "segmentation.nii.gz", kits_preprocessed_dir / f"labels{postfix}" / f"{name}.nii.gz")
 
-    dataset_json_url = "https://syncandshare.desy.de/index.php/s/Cfpwyg5dmi9a2Df/download/dataset.json"
-    response = requests.get(dataset_json_url)
-    response.raise_for_status()  # Raise an error on bad status
-    with open(kits_preprocessed_dir / "dataset.json", "wb") as f:
-        f.write(response.content)
+    names = [path.name[:-7] for path in (raw_dir / "ScribbleBench_scribbles" / "KiTS2023" / "scribblesTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "ScribbleBench_scribbles" / "KiTS2023" / "scribblesTr" / f"{name}.nii.gz", kits_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
 
     ####################################################################################################################
     #### Delete raw dataset files
@@ -297,6 +319,12 @@ def setup_lits_dataset(dataset_dir):
     url = 'https://drive.google.com/file/d/1jyVGUGyxKBXV6_9ivuZapQS8eUJXCIpu/view'
     gdown.download(url, str(archive_dir / "Task03_Liver.tar"), fuzzy=True)
 
+    scribbles_url = "https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei/download/ScribbleBench_scribbles.zip"
+    download(scribbles_url, archive_dir / "ScribbleBench_scribbles.zip")
+
+    dataset_json_url = 'https://syncandshare.desy.de/index.php/s/wBMtJcFm6D2icXA/download/dataset.json'
+    download(dataset_json_url, lits_preprocessed_dir / "dataset.json")
+
     ####################################################################################################################
     #### Unpack LiTS archive
     ####################################################################################################################
@@ -304,6 +332,9 @@ def setup_lits_dataset(dataset_dir):
     print("Unpacking LiTS archive...")
     with tarfile.open(archive_dir / "Task03_Liver.tar", "r:*") as tar:
         tar.extractall(path=raw_dir)
+
+    with zipfile.ZipFile(archive_dir / "ScribbleBench_scribbles.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir)
 
     ####################################################################################################################
     #### Preprocess LiTS dataset
@@ -314,6 +345,7 @@ def setup_lits_dataset(dataset_dir):
     (lits_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
     (lits_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
     (lits_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (lits_preprocessed_dir / "labelsTr_dense").mkdir(parents=True, exist_ok=True)
     (lits_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
 
     names = [p.name[:-7] for p in (lits_raw_dir / "labelsTr").iterdir()]
@@ -321,13 +353,14 @@ def setup_lits_dataset(dataset_dir):
     for name in names:
         postfix = "Tr" if name not in test_set else "Ts"
         shutil.move(lits_raw_dir / "imagesTr" / f"{name}.nii.gz", lits_preprocessed_dir / f"images{postfix}" / f"{name}_0000.nii.gz")
-        shutil.move(lits_raw_dir / "labelsTr" / f"{name}.nii.gz", lits_preprocessed_dir / f"labels{postfix}" / f"{name}.nii.gz")
+        if postfix == "Tr":
+            shutil.move(lits_raw_dir / "labelsTr" / f"{name}.nii.gz", lits_preprocessed_dir / f"labels{postfix}_dense" / f"{name}.nii.gz")
+        else:
+            shutil.move(lits_raw_dir / "labelsTr" / f"{name}.nii.gz", lits_preprocessed_dir / f"labels{postfix}" / f"{name}.nii.gz")
 
-    dataset_json_url = 'https://syncandshare.desy.de/index.php/s/wBMtJcFm6D2icXA/download/dataset.json'
-    response = requests.get(dataset_json_url)
-    response.raise_for_status()  # Raise an error on bad status
-    with open(lits_preprocessed_dir / "dataset.json", "wb") as f:
-        f.write(response.content)
+    names = [path.name[:-7] for path in (raw_dir / "ScribbleBench_scribbles" / "LiTS" / "scribblesTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "ScribbleBench_scribbles" / "LiTS" / "scribblesTr" / f"{name}.nii.gz", lits_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
 
     ####################################################################################################################
     #### Delete raw dataset files
@@ -365,23 +398,13 @@ def setup_acdc_dataset(dataset_dir):
 
     url = "https://humanheart-project.creatis.insa-lyon.fr/database/api/v1/collection/637218c173e9f0047faa00fb/download"
     acdc_archive_file = archive_dir / "ACDC.zip"
-    # Stream the download with a progress bar
-    with requests.get(url, stream=True) as response:
-        response.raise_for_status()
-        approx_total_size = int(2452590457)
-        chunk_size = 8192
+    download(url, acdc_archive_file, int(2452590457))
 
-        with open(acdc_archive_file, "wb") as f, tqdm(
-            total=approx_total_size,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-            desc=acdc_archive_file.name,
-        ) as progress:
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-                    progress.update(len(chunk))
+    scribbles_url = "https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei/download/ScribbleBench_scribbles.zip"
+    download(scribbles_url, archive_dir / "ScribbleBench_scribbles.zip")
+
+    dataset_json_url = "https://syncandshare.desy.de/index.php/s/KCDbLyeMwwZpFH5/download/dataset.json"
+    download(dataset_json_url, acdc_preprocessed_dir / "dataset.json")
 
     ####################################################################################################################
     #### Unpack ACDC archive
@@ -390,6 +413,9 @@ def setup_acdc_dataset(dataset_dir):
     print("Unpacking ACDC archive...")
     with zipfile.ZipFile(acdc_archive_file, 'r') as zip_ref:
         zip_ref.extractall(acdc_raw_dir)
+
+    with zipfile.ZipFile(archive_dir / "ScribbleBench_scribbles.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir)
 
     ####################################################################################################################
     #### Preprocess ACDC dataset
@@ -400,6 +426,7 @@ def setup_acdc_dataset(dataset_dir):
     (acdc_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
     (acdc_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
     (acdc_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (acdc_preprocessed_dir / "labelsTr_dense").mkdir(parents=True, exist_ok=True)
     (acdc_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
 
     acdc_train_raw_dir = acdc_raw_dir / "ACDC" / "database" / "training"
@@ -413,14 +440,16 @@ def setup_acdc_dataset(dataset_dir):
         postfix = "Tr" if f"{name}_ED" not in test_set else "Ts"
         shutil.move(acdc_train_raw_dir / name / f"{ed_name}.nii.gz", acdc_preprocessed_dir / f"images{postfix}" / f"{name}_ED_0000.nii.gz")
         shutil.move(acdc_train_raw_dir / name / f"{es_name}.nii.gz", acdc_preprocessed_dir / f"images{postfix}" / f"{name}_ES_0000.nii.gz")
-        shutil.move(acdc_train_raw_dir / name / f"{ed_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}" / f"{name}_ED.nii.gz")
-        shutil.move(acdc_train_raw_dir / name / f"{es_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}" / f"{name}_ES.nii.gz")
+        if postfix == "Tr":
+            shutil.move(acdc_train_raw_dir / name / f"{ed_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}_dense" / f"{name}_ED.nii.gz")
+            shutil.move(acdc_train_raw_dir / name / f"{es_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}_dense" / f"{name}_ES.nii.gz")
+        else:
+            shutil.move(acdc_train_raw_dir / name / f"{ed_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}" / f"{name}_ED.nii.gz")
+            shutil.move(acdc_train_raw_dir / name / f"{es_name}_gt.nii.gz", acdc_preprocessed_dir / f"labels{postfix}" / f"{name}_ES.nii.gz")
 
-    dataset_json_url = "https://syncandshare.desy.de/index.php/s/KCDbLyeMwwZpFH5/download/dataset.json"
-    response = requests.get(dataset_json_url)
-    response.raise_for_status()  # Raise an error on bad status
-    with open(acdc_preprocessed_dir / "dataset.json", "wb") as f:
-        f.write(response.content)
+    names = [path.name[:-7] for path in (raw_dir / "ScribbleBench_scribbles" / "ACDC" / "scribblesTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "ScribbleBench_scribbles" / "ACDC" / "scribblesTr" / f"{name}.nii.gz", acdc_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
 
     ####################################################################################################################
     #### Delete raw dataset files
@@ -433,24 +462,216 @@ def setup_acdc_dataset(dataset_dir):
     print("Finished setting up ACDC dataset.")
 
 
+def setup_amos_dataset(dataset_dir):
+    dataset_dir = Path(dataset_dir) / "ScribbleBench"
+    archive_dir = dataset_dir / "archive"
+    raw_dir = dataset_dir / "raw"
+    amos_raw_dir = raw_dir / "amos22"
+    preprocessed_dir = dataset_dir
+    amos_preprocessed_dir = preprocessed_dir / "AMOS2022_task2"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    preprocessed_dir.mkdir(parents=True, exist_ok=True)
+    amos_preprocessed_dir.mkdir(parents=True, exist_ok=True)
+
+    test_set = ['amos_0231', 'amos_0027', 'amos_0585', 'amos_0571', 'amos_0009', 'amos_0404', 'amos_0089', 'amos_0532', 'amos_0044', 
+                'amos_0320', 'amos_0580', 'amos_0005', 'amos_0071', 'amos_0403', 'amos_0522', 'amos_0510', 'amos_0162', 'amos_0048', 
+                'amos_0376', 'amos_0281', 'amos_0064', 'amos_0115', 'amos_0192', 'amos_0076', 'amos_0153', 'amos_0401', 'amos_0160', 
+                'amos_0104', 'amos_0186', 'amos_0299', 'amos_0181', 'amos_0530', 'amos_0371', 'amos_0408', 'amos_0400', 'amos_0554', 
+                'amos_0600', 'amos_0050', 'amos_0180', 'amos_0248', 'amos_0358', 'amos_0035', 'amos_0557', 'amos_0317', 'amos_0116', 
+                'amos_0332', 'amos_0113', 'amos_0294', 'amos_0110', 'amos_0297', 'amos_0075', 'amos_0118', 'amos_0217', 'amos_0015', 
+                'amos_0508', 'amos_0125', 'amos_0596', 'amos_0301', 'amos_0578', 'amos_0215', 'amos_0379', 'amos_0006', 'amos_0078', 
+                'amos_0226', 'amos_0263', 'amos_0538', 'amos_0336', 'amos_0370', 'amos_0052', 'amos_0274', 'amos_0047', 'amos_0121']
+
+    ####################################################################################################################
+    #### Download AMOS2022_task2 dataset
+    ####################################################################################################################
+
+    dataset_url = "https://zenodo.org/records/7155725/files/amos22.zip?download=1"
+    download(dataset_url, archive_dir / "amos22.zip", int(24.2 * 1024**3))
+
+    scribbles_url = "https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei/download/ScribbleBench_scribbles.zip"
+    download(scribbles_url, archive_dir / "ScribbleBench_scribbles.zip")
+
+    dataset_json_url = "https://syncandshare.desy.de/index.php/s/kWMmc2ggXpjDFnJ/download/dataset.json"
+    download(dataset_json_url, amos_preprocessed_dir / "dataset.json")
+
+    ####################################################################################################################
+    #### Unpack AMOS2022_task2 dataset archive
+    ####################################################################################################################
+
+    print("Unpacking AMOS2022_task2 dataset archive...")
+
+    with zipfile.ZipFile(archive_dir / "amos22.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir)
+
+    with zipfile.ZipFile(archive_dir / "ScribbleBench_scribbles.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir)
+
+    ####################################################################################################################
+    #### Preprocess AMOS2022_task2 dataset
+    ####################################################################################################################
+
+    print("Preprocessing AMOS2022_task2 dataset...")
+
+    (amos_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
+    (amos_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
+    (amos_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (amos_preprocessed_dir / "labelsTr_dense").mkdir(parents=True, exist_ok=True)
+    (amos_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
+
+    names = [p.name[:-7] for p in (amos_raw_dir / "labelsTr").iterdir()]
+    names = natsorted(names)
+
+    for name in names:
+        postfix = "Tr" if name not in test_set else "Ts"
+        shutil.move(amos_raw_dir / "imagesTr" / f"{name}.nii.gz", amos_preprocessed_dir / f"images{postfix}" / f"{name}_0000.nii.gz")
+        if postfix == "Tr":
+            shutil.move(amos_raw_dir / "labelsTr" / f"{name}.nii.gz", amos_preprocessed_dir / f"labels{postfix}_dense" / f"{name}.nii.gz")
+        else:
+            shutil.move(amos_raw_dir / "labelsTr" / f"{name}.nii.gz", amos_preprocessed_dir / f"labels{postfix}" / f"{name}.nii.gz")
+
+    names = [path.name[:-7] for path in (raw_dir / "ScribbleBench_scribbles" / "AMOS2022_task2" / "scribblesTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "ScribbleBench_scribbles" / "AMOS2022_task2" / "scribblesTr" / f"{name}.nii.gz", amos_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
+
+    ####################################################################################################################
+    #### Delete raw dataset files
+    ####################################################################################################################
+
+    print("Deleting raw dataset files...")
+    shutil.rmtree(archive_dir, ignore_errors=True)
+    shutil.rmtree(raw_dir, ignore_errors=True)
+
+    print("Finished setting up AMOS2022_task2 dataset.")
+
+
+def setup_brats_dataset(dataset_dir):
+    dataset_dir = Path(dataset_dir) / "ScribbleBench"
+    archive_dir = dataset_dir / "archive"
+    raw_dir = dataset_dir / "raw"
+    brats_raw_dir = raw_dir / "BraTS_2020"
+    preprocessed_dir = dataset_dir
+    brats_preprocessed_dir = preprocessed_dir / "BraTS2020"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    preprocessed_dir.mkdir(parents=True, exist_ok=True)
+    brats_raw_dir.mkdir(parents=True, exist_ok=True)
+    brats_preprocessed_dir.mkdir(parents=True, exist_ok=True)
+
+    test_set = ['BraTS20_Training_263', 'BraTS20_Training_119', 'BraTS20_Training_107', 'BraTS20_Training_173', 'BraTS20_Training_282', 
+                'BraTS20_Training_296', 'BraTS20_Training_007', 'BraTS20_Training_272', 'BraTS20_Training_299', 'BraTS20_Training_368', 
+                'BraTS20_Training_218', 'BraTS20_Training_280', 'BraTS20_Training_155', 'BraTS20_Training_180', 'BraTS20_Training_015', 
+                'BraTS20_Training_019', 'BraTS20_Training_152', 'BraTS20_Training_206', 'BraTS20_Training_264', 'BraTS20_Training_101', 
+                'BraTS20_Training_326', 'BraTS20_Training_269', 'BraTS20_Training_067', 'BraTS20_Training_188', 'BraTS20_Training_304', 
+                'BraTS20_Training_278', 'BraTS20_Training_142', 'BraTS20_Training_309', 'BraTS20_Training_317', 'BraTS20_Training_124', 
+                'BraTS20_Training_072', 'BraTS20_Training_226', 'BraTS20_Training_364', 'BraTS20_Training_047', 'BraTS20_Training_291', 
+                'BraTS20_Training_325', 'BraTS20_Training_071', 'BraTS20_Training_323', 'BraTS20_Training_024', 'BraTS20_Training_248', 
+                'BraTS20_Training_143', 'BraTS20_Training_018', 'BraTS20_Training_207', 'BraTS20_Training_059', 'BraTS20_Training_038', 
+                'BraTS20_Training_041', 'BraTS20_Training_008', 'BraTS20_Training_344', 'BraTS20_Training_311', 'BraTS20_Training_262', 
+                'BraTS20_Training_361', 'BraTS20_Training_252', 'BraTS20_Training_037', 'BraTS20_Training_250', 'BraTS20_Training_125', 
+                'BraTS20_Training_283', 'BraTS20_Training_085', 'BraTS20_Training_165', 'BraTS20_Training_227', 'BraTS20_Training_231', 
+                'BraTS20_Training_193', 'BraTS20_Training_338', 'BraTS20_Training_137', 'BraTS20_Training_298', 'BraTS20_Training_214', 
+                'BraTS20_Training_044', 'BraTS20_Training_318', 'BraTS20_Training_321', 'BraTS20_Training_281', 'BraTS20_Training_081', 
+                'BraTS20_Training_098', 'BraTS20_Training_301', 'BraTS20_Training_198', 'BraTS20_Training_070', 'BraTS20_Training_354', 
+                'BraTS20_Training_001', 'BraTS20_Training_315', 'BraTS20_Training_184', 'BraTS20_Training_179', 'BraTS20_Training_009', 
+                'BraTS20_Training_251', 'BraTS20_Training_118', 'BraTS20_Training_075', 'BraTS20_Training_172', 'BraTS20_Training_310', 
+                'BraTS20_Training_135', 'BraTS20_Training_129', 'BraTS20_Training_181', 'BraTS20_Training_232', 'BraTS20_Training_201', 
+                'BraTS20_Training_275', 'BraTS20_Training_162', 'BraTS20_Training_358', 'BraTS20_Training_111', 'BraTS20_Training_295', 
+                'BraTS20_Training_157', 'BraTS20_Training_139', 'BraTS20_Training_032', 'BraTS20_Training_040', 'BraTS20_Training_332', 
+                'BraTS20_Training_351', 'BraTS20_Training_337', 'BraTS20_Training_154', 'BraTS20_Training_039', 'BraTS20_Training_312', 
+                'BraTS20_Training_190', 'BraTS20_Training_170', 'BraTS20_Training_110', 'BraTS20_Training_222', 'BraTS20_Training_223', 
+                'BraTS20_Training_194']
+    
+    brats_train_raw_dir = brats_raw_dir / "MICCAI_BraTS2020_TrainingData"
+
+    if not brats_train_raw_dir.is_dir():
+        print("WARNING: BraTS2020 cannot be setup. You first need to submit a data request form to the BraTS organizers and download the data yourself. After that is completed move the unzipped dataset to the following path and retry this script.")
+        print("BraTS2020 Data Request: https://www.med.upenn.edu/cbica/brats2020/registration.html")
+        print(f"BraTS2020 Destination Path: {brats_train_raw_dir}")
+        return
+    
+    ####################################################################################################################
+    #### Download BraTS2020 dataset
+    ####################################################################################################################
+    
+    scribbles_url = "https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei/download/ScribbleBench_scribbles.zip"
+    download(scribbles_url, archive_dir / "ScribbleBench_scribbles.zip")
+
+    dataset_json_url = "https://syncandshare.desy.de/index.php/s/CrwGYF4EemMEXnd/download/dataset.json"
+    download(dataset_json_url, brats_preprocessed_dir / "dataset.json")
+
+    ####################################################################################################################
+    #### Unpack BraTS2020 dataset archive
+    ####################################################################################################################
+
+    print("Unpacking BraTS2020 dataset archive...")
+
+    with zipfile.ZipFile(archive_dir / "ScribbleBench_scribbles.zip", 'r') as zip_ref:
+        zip_ref.extractall(raw_dir)
+    
+    ####################################################################################################################
+    #### Preprocess BraTS2020 dataset
+    ####################################################################################################################
+    
+    print("Preprocessing BraTS2020 dataset...")
+    
+    (brats_preprocessed_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
+    (brats_preprocessed_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
+    (brats_preprocessed_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
+    (brats_preprocessed_dir / "labelsTr_dense").mkdir(parents=True, exist_ok=True)
+    (brats_preprocessed_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
+
+    names = [p.name for p in brats_train_raw_dir.iterdir() if p.is_dir()]
+    names = natsorted(names)
+
+    for name in names:
+        postfix = "Tr" if name not in test_set else "Ts"
+        shutil.move(brats_train_raw_dir / name / f"{name}_t1.nii.gz", brats_preprocessed_dir / f"images{postfix}" / f"{name}_0000.nii.gz")
+        shutil.move(brats_train_raw_dir / name / f"{name}_t1ce.nii.gz", brats_preprocessed_dir / f"images{postfix}" / f"{name}_0001.nii.gz")
+        shutil.move(brats_train_raw_dir / name / f"{name}_t2.nii.gz", brats_preprocessed_dir / f"images{postfix}" / f"{name}_0002.nii.gz")
+        shutil.move(brats_train_raw_dir / name / f"{name}_flair.nii.gz", brats_preprocessed_dir / f"images{postfix}" / f"{name}_0003.nii.gz")
+        if postfix == "Tr":
+            shutil.move(brats_train_raw_dir / name / f"{name}_seg.nii.gz", brats_preprocessed_dir / f"labels{postfix}_dense" / f"{name}.nii.gz")
+        else:
+            shutil.move(brats_train_raw_dir / name / f"{name}_seg.nii.gz", brats_preprocessed_dir / f"labels{postfix}" / f"{name}.nii.gz")
+
+    names = [path.name[:-7] for path in (raw_dir / "ScribbleBench_scribbles" / "BraTS2020" / "scribblesTr").rglob("*.nii.gz")]
+    for name in names:
+        shutil.move(raw_dir / "ScribbleBench_scribbles" / "BraTS2020" / "scribblesTr" / f"{name}.nii.gz", brats_preprocessed_dir / "labelsTr" / f"{name}.nii.gz")
+
+    ####################################################################################################################
+    #### Delete raw dataset files
+    ####################################################################################################################
+
+    print("Deleting archive and raw dataset files...")
+    shutil.rmtree(archive_dir, ignore_errors=True)
+    shutil.rmtree(raw_dir, ignore_errors=True)
+
+    print("Finished setting up BraTS2020 dataset.")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', "--dataset_dir", required=True, type=str, help="Path to the dir used for setting up ScribbleBench.")
-    parser.add_argument('--word', required=False, default=False, action="store_true", help="Download and preprocess the WORD dataset for ScribbleBench.")
-    parser.add_argument('--mscmr', required=False, default=False, action="store_true", help="Download and preprocess the MSCMR dataset for ScribbleBench.")
-    parser.add_argument('--kits', required=False, default=False, action="store_true", help="Download and preprocess the KiTS2023 dataset for ScribbleBench.")
-    parser.add_argument('--lits', required=False, default=False, action="store_true", help="Download and preprocess the LiTS dataset for ScribbleBench.")
     parser.add_argument('--acdc', required=False, default=False, action="store_true", help="Download and preprocess the ACDC dataset for ScribbleBench.")
+    parser.add_argument('--mscmr', required=False, default=False, action="store_true", help="Download and preprocess the MSCMR dataset for ScribbleBench.")
+    parser.add_argument('--word', required=False, default=False, action="store_true", help="Download and preprocess the WORD dataset for ScribbleBench.")
+    parser.add_argument('--lits', required=False, default=False, action="store_true", help="Download and preprocess the LiTS dataset for ScribbleBench.")
+    parser.add_argument('--brats', required=False, default=False, action="store_true", help="Download and preprocess the BraTS2020 dataset for ScribbleBench.")
+    parser.add_argument('--amos', required=False, default=False, action="store_true", help="Download and preprocess the AMOS2022 dataset for ScribbleBench.")
+    parser.add_argument('--kits', required=False, default=False, action="store_true", help="Download and preprocess the KiTS2023 dataset for ScribbleBench.")       
     args = parser.parse_args()
 
+    if args.acdc:
+        setup_acdc_dataset(args.dataset_dir)
+    if args.mscmr:
+        setup_mscmr_dataset(args.dataset_dir)
     if args.word:
         setup_word_dataset(args.dataset_dir)
-    if args.word:
-        setup_mscmr_dataset(args.dataset_dir)
-    if args.kits:
-        setup_kits_dataset(args.dataset_dir)
     if args.lits:
         setup_lits_dataset(args.dataset_dir)
-    if args.lits:
-        setup_acdc_dataset(args.dataset_dir)
-
+    if args.brats:
+        setup_brats_dataset(args.dataset_dir)
+    if args.amos:
+        setup_amos_dataset(args.dataset_dir)
+    if args.kits:
+        setup_kits_dataset(args.dataset_dir)

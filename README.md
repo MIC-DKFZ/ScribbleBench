@@ -27,7 +27,15 @@ ScribbleBench includes scribbles for the following 7 public datasets:
 
 ### 📥 Download Datasets
 
-We are currently preparing a script to setup the ScribbleBench benchmark which automatically downloads the datasets from their original sources alongside our scribbles and preprocesses all data. The script should be finished over the next couple days. If you want to get started with ScribbleBench now, you can download our ScribbleBench scribbles [here](https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei) and setup the datasets yourself.
+We provide a setup script in order to enable an easy setup of ScribbleBench that downloads and structures all datasets automatically ready for direct use. The setup script can be executed as follows:
+
+```bash
+python setup_benchmark.py \
+  --dataset path/to/output \
+  --mscmr --acdc [...]
+```
+
+If you  only want to use our ScribbleBench scribbles, we provide the download link [here](https://syncandshare.desy.de/index.php/s/DJ4KBZrZScFbTei).
 
 
 ## 🛠️ Scribble Generation
